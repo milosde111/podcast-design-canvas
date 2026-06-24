@@ -948,7 +948,7 @@
       }
     }
 
-    function applyLayout(name) {
+    function applyLayout(name, options = {}) {
       const previousVisible = new Set(
         visibleSlots().map((zone) => zone.dataset.slot),
       );
@@ -1037,7 +1037,10 @@
       const focusTarget = (blocking && blocking.classList.contains("is-invalid"))
         ? blocking
         : newlyVisibleRequired;
-      if (focusTarget) {
+      // Arrow-key layout stepping keeps focus on the picker so the creator can keep browsing
+      // layouts; skip the usual auto-focus into a newly visible or blocking slot, which would
+      // fight the picker's own focus() and flash slot state at screen-reader users mid-step.
+      if (focusTarget && !options.keepPickerFocus) {
         focusSlotInput(focusTarget);
       }
     }
@@ -1056,6 +1059,11 @@
       // arrow-key operation of placed videos; Home/End jump to the first/last layout. Focus
       // stays on the picker so the creator can keep stepping through layouts.
       button.addEventListener("keydown", (event) => {
+        // Only act when the layout option button itself holds focus, so a key bubbling up from
+        // a nested element cannot also step layouts (same guard as placed-video keyboard move).
+        if (event.target !== button) {
+          return;
+        }
         const key = event && event.key;
         let nextIndex = null;
         if (key === "ArrowRight" || key === "ArrowDown") nextIndex = (index + 1) % layoutButtons.length;
@@ -1065,8 +1073,15 @@
         if (nextIndex === null) return;
         if (event && typeof event.preventDefault === "function") event.preventDefault();
         const target = layoutButtons[nextIndex];
-        applyLayout(target.dataset.layout);
+        const nextLayout = target.dataset.layout;
+        const layoutChanged = nextLayout !== currentLayout;
+        const layoutDef = layouts[nextLayout] || layouts.interview;
+        applyLayout(nextLayout, { keepPickerFocus: true });
         if (target && typeof target.focus === "function") target.focus();
+        // Name the layout the arrow keys landed on, like move/swap/remove announce their action.
+        if (layoutChanged) {
+          announceAction(layoutDef.activeLabel + ".");
+        }
       });
     });
 
